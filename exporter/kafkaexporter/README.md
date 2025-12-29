@@ -44,12 +44,19 @@ The following settings can be optionally configured:
     - `username`: The username to use.
     - `password`: The password to use
   - `sasl`
-    - `username`: The username to use.
-    - `password`: The password to use
-    - `mechanism`: The SASL mechanism to use (SCRAM-SHA-256, SCRAM-SHA-512, AWS_MSK_IAM or PLAIN)
+    - `username`: The username to use. (Required for PLAIN, SCRAM-SHA-256, SCRAM-SHA-512, AWS_MSK_IAM)
+    - `password`: The password to use. (Required for PLAIN, SCRAM-SHA-256, SCRAM-SHA-512, AWS_MSK_IAM)
+    - `mechanism`: The SASL mechanism to use (SCRAM-SHA-256, SCRAM-SHA-512, AWS_MSK_IAM, PLAIN, or OAUTHBEARER)
     - `version` (default = 0): The SASL protocol version to use (0 or 1)
     - `aws_msk.region`: AWS Region in case of AWS_MSK_IAM mechanism
     - `aws_msk.broker_addr`: MSK Broker address in case of AWS_MSK_IAM mechanism
+    - `oauthbearer`: OAuth Bearer token configuration (Required for OAUTHBEARER mechanism)
+      - `token_provider`: Token provider type. Supported values:
+        - `gke_workload_identity`: Use GKE Workload Identity to fetch tokens from GKE metadata server. When using GKE Workload Identity, ensure your Kubernetes Service Account (KSA) is bound to a GCP Service Account (SA). The token will be automatically fetched from the metadata server using the bound service account. No additional configuration needed.
+        - `static`: Use a static token provided in the `token` field
+      - `token`: Static OAuth bearer token (required when `token_provider` is `static`)
+      - `service_account_email`: GCP service account email for GKE Workload Identity (optional, only needed if you want to use a specific service account instead of the default one bound to the KSA)
+      - `scope`: OAuth scope to request (optional, defaults to `https://www.googleapis.com/auth/cloud-platform`)
   - `tls`: see [TLS Configuration Settings](https://github.com/open-telemetry/opentelemetry-collector/blob/main/config/configtls/README.md) for the full set of available options.
     - `ca_file`: path to the CA cert. For a client this verifies the server certificate. Should
       only be used if `insecure` is set to false.
@@ -104,6 +111,45 @@ exporters:
     brokers:
       - localhost:9092
     protocol_version: 2.0.0
+```
+
+Example configuration with OAUTHBEARER authentication using GKE Workload Identity:
+
+```yaml
+exporters:
+  kafka:
+    brokers:
+      - kafka.example.com:9092
+    protocol_version: 2.0.0
+    topic: otlp_spans
+    auth:
+      sasl:
+        mechanism: OAUTHBEARER
+        oauthbearer:
+          token_provider: gke_workload_identity
+      tls:
+        insecure: false
+```
+
+**Note**: When using GKE Workload Identity, ensure your Kubernetes Service Account (KSA) is bound to a GCP Service Account (SA). The exporter will automatically use the bound service account to fetch tokens from the GKE metadata server. No additional configuration is needed.
+
+Example configuration with OAUTHBEARER authentication using static token:
+
+```yaml
+exporters:
+  kafka:
+    brokers:
+      - kafka.example.com:9092
+    protocol_version: 2.0.0
+    topic: otlp_spans
+    auth:
+      sasl:
+        mechanism: OAUTHBEARER
+        oauthbearer:
+          token_provider: static
+          token: "your-oauth-bearer-token-here"
+      tls:
+        insecure: false
 ```
 
 ## Destination Topic

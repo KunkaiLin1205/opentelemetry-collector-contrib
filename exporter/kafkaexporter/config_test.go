@@ -147,6 +147,68 @@ func TestLoadConfig(t *testing.T) {
 		{
 			id: component.NewIDWithName(metadata.Type, ""),
 			option: func(conf *Config) {
+				conf.Authentication = kafka.Authentication{
+					SASL: &kafka.SASLConfig{
+						Mechanism: "OAUTHBEARER",
+						OAuthBearer: kafka.OAuthBearerConfig{
+							TokenProvider: "gke_workload_identity",
+						},
+					},
+				}
+			},
+			expected: &Config{
+				TimeoutSettings: exporterhelper.TimeoutConfig{
+					Timeout: 10 * time.Second,
+				},
+				BackOffConfig: configretry.BackOffConfig{
+					Enabled:             true,
+					InitialInterval:     10 * time.Second,
+					MaxInterval:         1 * time.Minute,
+					MaxElapsedTime:      10 * time.Minute,
+					RandomizationFactor: backoff.DefaultRandomizationFactor,
+					Multiplier:          backoff.DefaultMultiplier,
+				},
+				QueueSettings: exporterhelper.QueueConfig{
+					Enabled:      true,
+					NumConsumers: 2,
+					QueueSize:    10,
+				},
+				Topic:                                "spans",
+				Encoding:                             "otlp_proto",
+				PartitionTracesByID:                  true,
+				PartitionMetricsByResourceAttributes: true,
+				PartitionLogsByResourceAttributes:    true,
+				Brokers:                              []string{"foo:123", "bar:456"},
+				ClientID:                             "test_client_id",
+				Authentication: kafka.Authentication{
+					PlainText: &kafka.PlainTextConfig{
+						Username: "jdoe",
+						Password: "pass",
+					},
+					SASL: &kafka.SASLConfig{
+						Mechanism: "OAUTHBEARER",
+						OAuthBearer: kafka.OAuthBearerConfig{
+							TokenProvider: "gke_workload_identity",
+						},
+					},
+				},
+				Metadata: Metadata{
+					Full: false,
+					Retry: MetadataRetry{
+						Max:     15,
+						Backoff: defaultMetadataRetryBackoff,
+					},
+				},
+				Producer: Producer{
+					MaxMessageBytes: 10000000,
+					RequiredAcks:    sarama.WaitForAll,
+					Compression:     "none",
+				},
+			},
+		},
+		{
+			id: component.NewIDWithName(metadata.Type, ""),
+			option: func(conf *Config) {
 				conf.ResolveCanonicalBootstrapServersOnly = true
 			},
 			expected: &Config{
@@ -272,7 +334,7 @@ func TestValidate_sasl_mechanism(t *testing.T) {
 	}
 
 	err := config.Validate()
-	assert.EqualError(t, err, "auth.sasl.mechanism should be one of 'PLAIN', 'AWS_MSK_IAM', 'SCRAM-SHA-256' or 'SCRAM-SHA-512'. configured value FAKE")
+	assert.EqualError(t, err, "auth.sasl.mechanism should be one of 'PLAIN', 'AWS_MSK_IAM', 'SCRAM-SHA-256', 'SCRAM-SHA-512' or 'OAUTHBEARER'. configured value FAKE")
 }
 
 func TestValidate_sasl_version(t *testing.T) {
@@ -292,6 +354,65 @@ func TestValidate_sasl_version(t *testing.T) {
 
 	err := config.Validate()
 	assert.EqualError(t, err, "auth.sasl.version has to be either 0 or 1. configured value 42")
+}
+
+func TestValidate_oauthbearer_gke_workload_identity(t *testing.T) {
+	config := &Config{
+		Producer: Producer{
+			Compression: "none",
+		},
+		Authentication: kafka.Authentication{
+			SASL: &kafka.SASLConfig{
+				Mechanism: "OAUTHBEARER",
+				OAuthBearer: kafka.OAuthBearerConfig{
+					TokenProvider: "gke_workload_identity",
+				},
+			},
+		},
+	}
+
+	err := config.Validate()
+	assert.NoError(t, err)
+}
+
+func TestValidate_oauthbearer_static_token(t *testing.T) {
+	config := &Config{
+		Producer: Producer{
+			Compression: "none",
+		},
+		Authentication: kafka.Authentication{
+			SASL: &kafka.SASLConfig{
+				Mechanism: "OAUTHBEARER",
+				OAuthBearer: kafka.OAuthBearerConfig{
+					TokenProvider: "static",
+					Token:         "test-token",
+				},
+			},
+		},
+	}
+
+	err := config.Validate()
+	assert.NoError(t, err)
+}
+
+func TestValidate_oauthbearer_static_token_missing(t *testing.T) {
+	config := &Config{
+		Producer: Producer{
+			Compression: "none",
+		},
+		Authentication: kafka.Authentication{
+			SASL: &kafka.SASLConfig{
+				Mechanism: "OAUTHBEARER",
+				OAuthBearer: kafka.OAuthBearerConfig{
+					TokenProvider: "static",
+					Token:         "",
+				},
+			},
+		},
+	}
+
+	err := config.Validate()
+	assert.EqualError(t, err, "auth.sasl.oauthbearer.token is required when token_provider is 'static'")
 }
 
 func Test_saramaProducerCompressionCodec(t *testing.T) {

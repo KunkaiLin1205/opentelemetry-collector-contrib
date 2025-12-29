@@ -1,0 +1,21 @@
+kafka:
+  topic: otlp_spans
+  brokers:
+    - "kafka.example.com:9092"
+  protocol_version: "2.0.0"
+  client_id: otel-collector
+  group_id: otel-collector
+  initial_offset: latest
+  auth:
+    sasl:
+      mechanism: OAUTHBEARER
+      oauthbearer:
+        token_provider: gke_workload_identity
+    tls:
+      insecure: false
+  metadata:
+    full: true
+    retry:
+      max: 3
+      backoff: 250ms
+

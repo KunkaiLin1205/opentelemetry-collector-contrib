@@ -1,0 +1,33 @@
+kafka:
+  topic: otlp_spans
+  brokers:
+    - "kafka.example.com:9092"
+  client_id: "signoz-collector"
+  protocol_version: "2.0.0"
+  metadata:
+    full: true
+    retry:
+      max: 3
+      backoff: 250ms
+  producer:
+    max_message_bytes: 1000000
+    required_acks: 1
+    compression: "gzip"
+  timeout: 10s
+  auth:
+    sasl:
+      mechanism: OAUTHBEARER
+      oauthbearer:
+        token_provider: gke_workload_identity
+    tls:
+      insecure: false
+  sending_queue:
+    enabled: true
+    num_consumers: 10
+    queue_size: 1000
+  retry_on_failure:
+    enabled: true
+    initial_interval: 5s
+    max_interval: 30s
+    max_elapsed_time: 120s
+

@@ -135,19 +135,24 @@ func validateSASLConfig(c *kafka.SASLConfig) error {
 		return nil
 	}
 
-	if c.Username == "" {
-		return fmt.Errorf("auth.sasl.username is required")
-	}
-
-	if c.Password == "" {
-		return fmt.Errorf("auth.sasl.password is required")
-	}
-
 	switch c.Mechanism {
+	case "OAUTHBEARER":
+		// For OAUTHBEARER, username and password are not required
+		// Validate OAuthBearer configuration
+		if c.OAuthBearer.TokenProvider == "static" && c.OAuthBearer.Token == "" {
+			return fmt.Errorf("auth.sasl.oauthbearer.token is required when token_provider is 'static'")
+		}
 	case "PLAIN", "AWS_MSK_IAM", "SCRAM-SHA-256", "SCRAM-SHA-512":
-		// Do nothing, valid mechanism
+		// For other mechanisms, username and password are required
+		if c.Username == "" {
+			return fmt.Errorf("auth.sasl.username is required")
+		}
+
+		if c.Password == "" {
+			return fmt.Errorf("auth.sasl.password is required")
+		}
 	default:
-		return fmt.Errorf("auth.sasl.mechanism should be one of 'PLAIN', 'AWS_MSK_IAM', 'SCRAM-SHA-256' or 'SCRAM-SHA-512'. configured value %v", c.Mechanism)
+		return fmt.Errorf("auth.sasl.mechanism should be one of 'PLAIN', 'AWS_MSK_IAM', 'SCRAM-SHA-256', 'SCRAM-SHA-512' or 'OAUTHBEARER'. configured value %v", c.Mechanism)
 	}
 
 	if c.Version < 0 || c.Version > 1 {

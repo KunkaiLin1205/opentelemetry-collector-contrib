@@ -120,3 +120,27 @@ func TestLoadConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadConfig_OAuthBearer(t *testing.T) {
+	t.Parallel()
+
+	cm, err := confmaptest.LoadConf(filepath.Join("testdata", "config_oauthbearer.yaml"))
+	require.NoError(t, err)
+
+	factory := NewFactory()
+	cfg := factory.CreateDefaultConfig()
+
+	sub, err := cm.Sub("kafka")
+	require.NoError(t, err)
+	require.NoError(t, sub.Unmarshal(cfg))
+
+	assert.NoError(t, component.ValidateConfig(cfg))
+
+	// Verify the key fields
+	assert.Equal(t, "otlp_spans", cfg.(*Config).Topic)
+	assert.Equal(t, []string{"kafka.example.com:9092"}, cfg.(*Config).Brokers)
+	assert.Equal(t, "2.0.0", cfg.(*Config).ProtocolVersion)
+	assert.NotNil(t, cfg.(*Config).Authentication.SASL)
+	assert.Equal(t, "OAUTHBEARER", cfg.(*Config).Authentication.SASL.Mechanism)
+	assert.Equal(t, "gke_workload_identity", cfg.(*Config).Authentication.SASL.OAuthBearer.TokenProvider)
+}

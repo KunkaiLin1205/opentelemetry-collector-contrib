@@ -35,12 +35,15 @@ type SASLConfig struct {
 	Username string `mapstructure:"username"`
 	// Password to be used on authentication
 	Password string `mapstructure:"password"`
-	// SASL Mechanism to be used, possible values are: (PLAIN, AWS_MSK_IAM, SCRAM-SHA-256 or SCRAM-SHA-512).
+	// SASL Mechanism to be used, possible values are: (PLAIN, AWS_MSK_IAM, SCRAM-SHA-256, SCRAM-SHA-512, OAUTHBEARER).
 	Mechanism string `mapstructure:"mechanism"`
 	// SASL Protocol Version to be used, possible values are: (0, 1). Defaults to 0.
 	Version int `mapstructure:"version"`
 
 	AWSMSK AWSMSKConfig `mapstructure:"aws_msk"`
+
+	// OAuthBearer defines the configuration for OAUTHBEARER authentication.
+	OAuthBearer OAuthBearerConfig `mapstructure:"oauthbearer"`
 }
 
 // AWSMSKConfig defines the additional SASL authentication
@@ -50,6 +53,25 @@ type AWSMSKConfig struct {
 	Region string `mapstructure:"region"`
 	// BrokerAddr is the client is connecting to in order to perform the auth required
 	BrokerAddr string `mapstructure:"broker_addr"`
+}
+
+// OAuthBearerConfig defines the configuration for OAUTHBEARER authentication.
+type OAuthBearerConfig struct {
+	// TokenProvider is the token provider type. Supported values: "gcp_metadata", "gke_workload_identity", "static".
+	// When set to "gcp_metadata" or "gke_workload_identity", the token will be fetched from GCP metadata server
+	// using Google's official oauth2 library. This supports GKE Workload Identity, GCE, and other GCP environments.
+	// "gke_workload_identity" is an alias for "gcp_metadata" for backward compatibility.
+	// When set to "static", the token will be read from the Token field.
+	TokenProvider string `mapstructure:"token_provider"`
+	// Token is the static OAuth bearer token. Only used when TokenProvider is "static".
+	Token string `mapstructure:"token"`
+	// ServiceAccountEmail is the GCP service account email (currently not used, reserved for future use).
+	// When using GKE Workload Identity, the service account is automatically determined from the
+	// Kubernetes Service Account binding via google.DefaultTokenSource. This field is kept for backward compatibility.
+	ServiceAccountEmail string `mapstructure:"service_account_email"`
+	// Scope is the OAuth scope to request. Only used when TokenProvider is "gcp_metadata" or "gke_workload_identity".
+	// Defaults to "https://www.googleapis.com/auth/cloud-platform".
+	Scope string `mapstructure:"scope"`
 }
 
 // KerberosConfig defines kerberos configuration.
@@ -93,35 +115,63 @@ func configurePlaintext(config PlainTextConfig, saramaConfig *sarama.Config) {
 }
 
 func configureSASL(config SASLConfig, saramaConfig *sarama.Config) error {
-
-	if config.Username == "" {
-		return fmt.Errorf("username have to be provided")
-	}
-
-	if config.Password == "" {
-		return fmt.Errorf("password have to be provided")
-	}
-
 	saramaConfig.Net.SASL.Enable = true
-	saramaConfig.Net.SASL.User = config.Username
-	saramaConfig.Net.SASL.Password = config.Password
 
 	switch config.Mechanism {
+	case "OAUTHBEARER":
+		tokenProvider, err := newOAuthBearerTokenProvider(config.OAuthBearer)
+		if err != nil {
+			return fmt.Errorf("failed to create OAuth bearer token provider: %w", err)
+		}
+		saramaConfig.Net.SASL.Mechanism = sarama.SASLTypeOAuth
+		saramaConfig.Net.SASL.TokenProvider = tokenProvider
 	case "SCRAM-SHA-512":
+		if config.Username == "" {
+			return fmt.Errorf("username have to be provided")
+		}
+		if config.Password == "" {
+			return fmt.Errorf("password have to be provided")
+		}
+		saramaConfig.Net.SASL.User = config.Username
+		saramaConfig.Net.SASL.Password = config.Password
 		saramaConfig.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: sha512.New} }
 		saramaConfig.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA512
 	case "SCRAM-SHA-256":
+		if config.Username == "" {
+			return fmt.Errorf("username have to be provided")
+		}
+		if config.Password == "" {
+			return fmt.Errorf("password have to be provided")
+		}
+		saramaConfig.Net.SASL.User = config.Username
+		saramaConfig.Net.SASL.Password = config.Password
 		saramaConfig.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: sha256.New} }
 		saramaConfig.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA256
 	case "PLAIN":
+		if config.Username == "" {
+			return fmt.Errorf("username have to be provided")
+		}
+		if config.Password == "" {
+			return fmt.Errorf("password have to be provided")
+		}
+		saramaConfig.Net.SASL.User = config.Username
+		saramaConfig.Net.SASL.Password = config.Password
 		saramaConfig.Net.SASL.Mechanism = sarama.SASLTypePlaintext
 	case "AWS_MSK_IAM":
+		if config.Username == "" {
+			return fmt.Errorf("username have to be provided")
+		}
+		if config.Password == "" {
+			return fmt.Errorf("password have to be provided")
+		}
+		saramaConfig.Net.SASL.User = config.Username
+		saramaConfig.Net.SASL.Password = config.Password
 		saramaConfig.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient {
 			return awsmsk.NewIAMSASLClient(config.AWSMSK.BrokerAddr, config.AWSMSK.Region, saramaConfig.ClientID)
 		}
 		saramaConfig.Net.SASL.Mechanism = awsmsk.Mechanism
 	default:
-		return fmt.Errorf(`invalid SASL Mechanism %q: can be either "PLAIN", "AWS_MSK_IAM", "SCRAM-SHA-256" or "SCRAM-SHA-512"`, config.Mechanism)
+		return fmt.Errorf(`invalid SASL Mechanism %q: can be either "PLAIN", "AWS_MSK_IAM", "SCRAM-SHA-256", "SCRAM-SHA-512" or "OAUTHBEARER"`, config.Mechanism)
 	}
 
 	switch config.Version {
