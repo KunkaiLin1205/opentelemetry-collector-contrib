@@ -10,5 +10,11 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	goleak.VerifyTestMain(m)
+	// Ignore goroutines created by google.DefaultTokenSource for OAuth token refresh
+	// These are expected background goroutines that manage token lifecycle
+	goleak.VerifyTestMain(m,
+		goleak.IgnoreTopFunction("internal/poll.runtime_pollWait"),
+		goleak.IgnoreTopFunction("net.(*netFD).connect"),
+		goleak.IgnoreTopFunction("net.(*netFD).connect.func2"),
+	)
 }

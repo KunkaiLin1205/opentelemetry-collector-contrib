@@ -62,10 +62,11 @@ The following settings can be optionally configured:
     - `aws_msk.broker_addr`: MSK Broker address in case of AWS_MSK_IAM mechanism
     - `oauthbearer`: OAuth Bearer token configuration (Required for OAUTHBEARER mechanism)
       - `token_provider`: Token provider type. Supported values:
-        - `gke_workload_identity`: Use GKE Workload Identity to fetch tokens from GKE metadata server. When using GKE Workload Identity, ensure your Kubernetes Service Account (KSA) is bound to a GCP Service Account (SA). The token will be automatically fetched from the metadata server using the bound service account. No additional configuration needed.
+        - `gcp_metadata`: Use GCP metadata server to fetch tokens. This supports GKE Workload Identity, GCE, and other GCP environments. When using GKE Workload Identity, ensure your Kubernetes Service Account (KSA) is bound to a GCP Service Account (SA). The token will be automatically fetched from the metadata server using the bound service account. No additional configuration needed.
+        - `gke_workload_identity`: Alias for `gcp_metadata` for backward compatibility. Use GKE Workload Identity to fetch tokens from GKE metadata server. When using GKE Workload Identity, ensure your Kubernetes Service Account (KSA) is bound to a GCP Service Account (SA). The token will be automatically fetched from the metadata server using the bound service account. No additional configuration needed.
         - `static`: Use a static token provided in the `token` field
       - `token`: Static OAuth bearer token (required when `token_provider` is `static`)
-      - `service_account_email`: GCP service account email for GKE Workload Identity (optional, only needed if you want to use a specific service account instead of the default one bound to the KSA)
+      - `service_account_email`: GCP service account email (optional, currently not used, reserved for future use)
       - `scope`: OAuth scope to request (optional, defaults to `https://www.googleapis.com/auth/cloud-platform`)
   - `tls`
     - `ca_file`: path to the CA cert. For a client this verifies the server certificate. Should

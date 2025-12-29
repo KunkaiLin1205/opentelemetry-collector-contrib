@@ -10,6 +10,7 @@ require (
 	go.opentelemetry.io/collector/config/configtls v1.17.0
 	go.uber.org/goleak v1.3.0
 	go.uber.org/multierr v1.11.0
+	golang.org/x/oauth2 v0.34.0
 )
 
 require (
@@ -38,7 +39,6 @@ require (
 	go.opentelemetry.io/collector/config/configopaque v1.17.0 // indirect
 	golang.org/x/crypto v0.26.0 // indirect
 	golang.org/x/net v0.28.0 // indirect
-	golang.org/x/oauth2 v0.34.0 // indirect
 	golang.org/x/sys v0.23.0 // indirect
 	golang.org/x/text v0.17.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
